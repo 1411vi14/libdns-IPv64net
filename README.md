@@ -1,7 +1,7 @@
 # ipv64net libdns provider
 
 This module implements the libdns interfaces for IPv64.net and allows listing,
-adding, updating and deleting DNS records via IPv64.net's dyndns_updater_api.php.
+adding, updating and deleting DNS records via IPv64.net's api.php.
 
 Installation:
 1. Get the module:

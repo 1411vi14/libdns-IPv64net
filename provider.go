@@ -16,6 +16,8 @@ import (
 	"github.com/libdns/libdns"
 )
 
+var apiURL string = "https://ipv64.net/api"
+
 // Provider facilitates DNS record manipulation with IPv64.net.
 type Provider struct {
 	// API token for authentication with the IPv64.net API.
@@ -23,11 +25,11 @@ type Provider struct {
 
 	// Optional custom HTTP client timeout in seconds. If unset, defaults to 15s.
 	HTTPTimeoutSeconds int `json:"http_timeout_seconds,omitempty"`
+
+	httpClient *http.Client
 }
 
-const apiURL = "https://ipv64.net/api"
-
-func (p *Provider) httpClient() *http.Client {
+func (p *Provider) getHttpClient() *http.Client {
 	timeout := 15 * time.Second
 	if p.HTTPTimeoutSeconds > 0 {
 		timeout = time.Duration(p.HTTPTimeoutSeconds) * time.Second
@@ -61,7 +63,7 @@ func (p *Provider) doRequest(ctx context.Context, params url.Values, method stri
 	// set Authorization header as Bearer token
 	req.Header.Set("Authorization", "Bearer "+p.APIToken)
 
-	resp, err := p.httpClient().Do(req)
+	resp, err := p.getHttpClient().Do(req)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -155,7 +157,7 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 			rr := libdns.RR{
 				Type: prefixRecord.Type,
 				Name: prefixRecord.Praefix,
-				TTL:  time.Duration(prefixRecord.TTL),
+				TTL:  time.Duration(prefixRecord.TTL) * time.Second,
 			}
 
 			out = append(out, rr)
