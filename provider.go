@@ -18,7 +18,7 @@ import (
 	"github.com/libdns/libdns"
 )
 
-var apiURL string = "https://ipv64.net/api"
+var apiURL string = "http://localhost:5044/api"
 
 // Provider facilitates DNS record manipulation with IPv64.net.
 type Provider struct {
@@ -43,8 +43,8 @@ func (p *Provider) doRequest(ctx context.Context, params url.Values, method stri
 	if p.APIToken == "" {
 		return nil, 0, fmt.Errorf("ipv64net: api token not set")
 	}
-	// include token param for API compatibility
-	params.Set("token", p.APIToken)
+
+	fmt.Printf("ipv64net: doRequest params: %s\n", params.Encode())
 
 	var req *http.Request
 	var err error
@@ -128,6 +128,7 @@ type getDomainsResp struct {
 
 // GetRecords lists all the records in the zone.
 func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
+	fmt.Println("ipv64net: GetRecords called")
 	// request domain information using documented get_domains
 	params := url.Values{}
 	params.Set("get_domains", "")
@@ -171,6 +172,7 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 
 // AppendRecords adds records to the zone. It returns the records that were added.
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	fmt.Println("ipv64net: AppendRecords called")
 	var added []libdns.Record
 	for _, r := range records {
 		rr := r.RR()
@@ -189,6 +191,8 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 			return nil, err
 		}
 		if !isSuccessStatus(status) {
+			// Print params for debugging
+			fmt.Printf("ipv64net: add_record params: %s\n", params.Encode())
 			return nil, fmt.Errorf("ipv64net: add_record failed: %d %s", status, string(body))
 		}
 		added = append(added, r)
@@ -198,6 +202,7 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 
 // SetRecords sets the records in the zone by deleting existing matching records and adding the supplied ones.
 func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	fmt.Println("ipv64net: SetRecords called")
 	var updated []libdns.Record
 	for _, r := range records {
 		// Try delete first (best-effort), then add the new record.
@@ -213,6 +218,7 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 
 // DeleteRecords deletes the specified records from the zone. It returns the records that were deleted.
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
+	fmt.Println("ipv64net: DeleteRecords called")
 	var deleted []libdns.Record
 	for _, r := range records {
 		rr := r.RR()
