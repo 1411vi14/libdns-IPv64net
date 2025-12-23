@@ -69,3 +69,10 @@ Notes:
 - Set your API token in the `APIToken` field of the Provider.
 - Optionally set `HTTPTimeoutSeconds`; default is 15s.
 - This package implements the libdns interfaces: ZoneLister, RecordAppender, RecordDeleter.
+
+Usefull Commands for Windows:
+- Find Caddy Binary with PowerShell: `(Get-Command caddy).Path`
+- WinGet Caddy Binary Path: `%LOCALAPPDATA%\Microsoft\WinGet\Packages\CaddyServer.Caddy_Microsoft.Winget.Source_8wekyb3d8bbwe\caddy.exe`
+- `Start-Service caddy -ErrorAction SilentlyContinue`
+- `Stop-Service caddy -ErrorAction SilentlyContinue`
+- `.\caddy-ipv64net.exe list-modules | Select-String ipv64net`
