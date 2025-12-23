@@ -1,7 +1,26 @@
 # ipv64net libdns provider
 
 This module implements the libdns interfaces for IPv64.net and allows listing,
-adding, updating and deleting DNS records via IPv64.net's api.php.
+adding, updating and deleting DNS records via IPv64.net's API.
+
+Build Caddy with IPv64net Plugin:
+```bash
+xcaddy build --with github.com/1411vi14/libdns-IPv64net -output .\caddy-ipv64net.exe
+```
+
+Example usage with Caddy (Caddyfile):
+```caddy
+https://test.example.com {
+	tls {
+		dns ipv64net {
+			api_token {env.IPV64_API_TOKEN}
+			http_timeout_seconds 15
+		}
+	}
+
+	respond "Hello, secure world!"
+}
+```
 
 Installation:
 1. Get the module:
@@ -42,10 +61,11 @@ func main() {
 		},
 	}
 	_, _ = p.AppendRecords(ctx, zone, records)
+	_, _ = p.DeleteRecords(ctx, zone, records)
 }
 ```
 
 Notes:
 - Set your API token in the `APIToken` field of the Provider.
 - Optionally set `HTTPTimeoutSeconds`; default is 15s.
-- This package implements the libdns interfaces: RecordGetter, RecordAppender, RecordSetter, RecordDeleter.
+- This package implements the libdns interfaces: ZoneLister, RecordAppender, RecordDeleter.
