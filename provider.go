@@ -1,14 +1,12 @@
-// Package libdnstemplate implements a DNS record management client compatible
-// with the libdns interfaces for IPv64.net. TODO: This package is a
-// template only. Customize all godocs for actual implementation.
-package libdnstemplate
+// Package ipv64net implements a libdns provider for IPv64.net.
+// It allows listing, adding, updating and deleting DNS records using IPv64.net's dyndns_updater_api.php.
+package ipv64net
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -18,18 +16,12 @@ import (
 	"github.com/libdns/libdns"
 )
 
-// TODO: Providers must not require additional provisioning steps by the callers; it
-// should work simply by populating a struct and calling methods on it. If your DNS
-// service requires long-lived state or some extra provisioning step, do it implicitly
-// when methods are called; sync.Once can help with this, and/or you can use a
-// sync.(RW)Mutex in your Provider struct to synchronize implicit provisioning.
-
 // Provider facilitates DNS record manipulation with IPv64.net.
 type Provider struct {
-	// TODO: Put config fields here (with snake_case json struct tags on exported fields), for example:
+	// API token for authentication with the IPv64.net API.
 	APIToken string `json:"api_token,omitempty"`
 
-	// optional custom client timeout
+	// Optional custom HTTP client timeout in seconds. If unset, defaults to 15s.
 	HTTPTimeoutSeconds int `json:"http_timeout_seconds,omitempty"`
 }
 
@@ -54,7 +46,7 @@ func (p *Provider) httpClient() *http.Client {
 func (p *Provider) doAPI(ctx context.Context, params url.Values) ([]apiRecord, error) {
 	// ensure token included
 	if p.APIToken == "" {
-		return nil, fmt.Errorf("ipv64: api token not set")
+		return nil, fmt.Errorf("IPv64.net: api token not set")
 	}
 	params.Set("token", p.APIToken)
 
@@ -70,7 +62,7 @@ func (p *Provider) doAPI(ctx context.Context, params url.Values) ([]apiRecord, e
 	}
 	defer resp.Body.Close()
 
-	body, _ := ioutil.ReadAll(resp.Body)
+	body, _ := io.ReadAll(resp.Body)
 	bs := bytesTrimBOM(body)
 	// Try JSON first
 	var arr []apiRecord
@@ -127,6 +119,9 @@ func bytesTrimBOM(b []byte) []byte {
 	return b
 }
 
+// fqdnToRelative converts a fully-qualified or relative record name to the
+// provider-expected relative form with respect to the zone. Returns empty string
+// for the zone apex.
 func fqdnToRelative(name, zone string) string {
 	name = strings.TrimSpace(name)
 	if name == "" || name == "@" {
@@ -145,6 +140,8 @@ func fqdnToRelative(name, zone string) string {
 	return name
 }
 
+// relativeToHost converts the relative name into the host value expected by the API.
+// The IPv64.net API expects "@" for the zone apex.
 func relativeToHost(name, zone string) string {
 	// API expects host relative or @ for zone apex
 	if name == "" {
@@ -165,17 +162,19 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 		return nil, err
 	}
 	var out []libdns.Record
-	for _, r := range apiRecs {
-		name := fqdnToRelative(r.Name, zone)
-		rec := libdns.Record{
-			Type:  r.Type,
-			Name:  name,
-			Value: r.Content,
+	for _, ar := range apiRecs {
+		name := fqdnToRelative(ar.Name, zone)
+		// libdns.RR uses "@" to represent the zone apex; ensure we follow that convention.
+		if name == "" {
+			name = "@"
 		}
-		if r.TTL > 0 {
-			rec.TTL = time.Duration(r.TTL) * time.Second
+		rr := libdns.RR{
+			Type: ar.Type,
+			Name: name,
+			Data: ar.Content,
+			TTL:  time.Duration(ar.TTL) * time.Second,
 		}
-		out = append(out, rec)
+		out = append(out, rr)
 	}
 	return out, nil
 }
@@ -184,14 +183,15 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 func (p *Provider) AppendRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	var added []libdns.Record
 	for _, r := range records {
+		rr := r.RR()
 		params := url.Values{}
 		params.Set("action", "add")
 		params.Set("zone", zone)
-		params.Set("host", relativeToHost(r.Name, zone))
-		params.Set("type", r.Type)
-		params.Set("content", r.Value)
-		if r.TTL > 0 {
-			params.Set("ttl", strconv.Itoa(int(r.TTL.Seconds())))
+		params.Set("host", relativeToHost(rr.Name, zone))
+		params.Set("type", rr.Type)
+		params.Set("content", rr.Data)
+		if rr.TTL > 0 {
+			params.Set("ttl", strconv.Itoa(int(rr.TTL.Seconds())))
 		}
 		// priority if present in Value? libdns.Record has no Prio field; skip unless TTL used
 		_, err := p.doAPI(ctx, params)
@@ -208,14 +208,15 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	var updated []libdns.Record
 	for _, r := range records {
+		rr := r.RR()
 		params := url.Values{}
 		params.Set("action", "update")
 		params.Set("zone", zone)
-		params.Set("host", relativeToHost(r.Name, zone))
-		params.Set("type", r.Type)
-		params.Set("content", r.Value)
-		if r.TTL > 0 {
-			params.Set("ttl", strconv.Itoa(int(r.TTL.Seconds())))
+		params.Set("host", relativeToHost(rr.Name, zone))
+		params.Set("type", rr.Type)
+		params.Set("content", rr.Data)
+		if rr.TTL > 0 {
+			params.Set("ttl", strconv.Itoa(int(rr.TTL.Seconds())))
 		}
 		_, err := p.doAPI(ctx, params)
 		if err != nil {
@@ -223,11 +224,11 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 			addParams := url.Values{}
 			addParams.Set("action", "add")
 			addParams.Set("zone", zone)
-			addParams.Set("host", relativeToHost(r.Name, zone))
-			addParams.Set("type", r.Type)
-			addParams.Set("content", r.Value)
-			if r.TTL > 0 {
-				addParams.Set("ttl", strconv.Itoa(int(r.TTL.Seconds())))
+			addParams.Set("host", relativeToHost(rr.Name, zone))
+			addParams.Set("type", rr.Type)
+			addParams.Set("content", rr.Data)
+			if rr.TTL > 0 {
+				addParams.Set("ttl", strconv.Itoa(int(rr.TTL.Seconds())))
 			}
 			if _, err2 := p.doAPI(ctx, addParams); err2 != nil {
 				return nil, fmt.Errorf("update error: %v; add fallback error: %v", err, err2)
@@ -242,14 +243,15 @@ func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	var deleted []libdns.Record
 	for _, r := range records {
+		rr := r.RR()
 		params := url.Values{}
 		params.Set("action", "delete")
 		params.Set("zone", zone)
-		params.Set("host", relativeToHost(r.Name, zone))
-		params.Set("type", r.Type)
+		params.Set("host", relativeToHost(rr.Name, zone))
+		params.Set("type", rr.Type)
 		// Some APIs expect content to choose which record to delete if multiple exist
-		if r.Value != "" {
-			params.Set("content", r.Value)
+		if rr.Data != "" {
+			params.Set("content", rr.Data)
 		}
 		_, err := p.doAPI(ctx, params)
 		if err != nil {

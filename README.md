@@ -1,29 +1,51 @@
-DEVELOPER INSTRUCTIONS:
-=======================
+# ipv64net libdns provider
 
-This repo is a template for developers to use when creating new [libdns](https://github.com/libdns/libdns) provider implementations.
+This module implements the libdns interfaces for IPv64.net and allows listing,
+adding, updating and deleting DNS records via IPv64.net's dyndns_updater_api.php.
 
-Be sure to update:
+Installation:
+1. Get the module:
+   go get github.com/1411vi14/libdns-IPv64net
 
-- The package name
-- The Go module name in go.mod
-- The latest `libdns/libdns` version in go.mod
-- All comments and documentation, including README below and godocs
-- License (must be compatible with Apache/MIT)
-- All "TODO:"s is in the code
-- All methods that currently do nothing
+Example usage:
+```go
+package main
 
-**Please be sure to conform to the semantics described at the [libdns godoc](https://github.com/libdns/libdns).**
+import (
+	"context"
+	"fmt"
+	"time"
 
-_Remove this section from the readme before publishing._
+	"github.com/libdns/libdns"
+	"github.com/1411vi14/libdns-IPv64net"
+)
 
----
+func main() {
+	p := &ipv64net.Provider{APIToken: "your-token"}
+	ctx := context.Background()
+	zone := "example.com"
 
-IPv64.net provider for [`libdns`](https://github.com/libdns/libdns)
-=======================
+	// List records
+	recs, err := p.GetRecords(ctx, zone)
+	if err != nil {
+		fmt.Println("list error:", err)
+	}
+	_ = recs
 
-[![Go Reference](https://pkg.go.dev/badge/test.svg)](https://pkg.go.dev/github.com/libdns/TODO:PROVIDER_NAME)
+	// Add a record (use libdns.RR or a typed record when available)
+	records := []libdns.Record{
+		libdns.RR{
+			Type: "A",
+			Name: "test",
+			Data: "1.2.3.4",
+			TTL:  time.Minute * 5,
+		},
+	}
+	_, _ = p.AppendRecords(ctx, zone, records)
+}
+```
 
-This package implements the [libdns interfaces](https://github.com/libdns/libdns) for IPv64.net, allowing you to manage DNS records.
-
-TODO: Show how to configure and use. Explain any caveats.
+Notes:
+- Set your API token in the `APIToken` field of the Provider.
+- Optionally set `HTTPTimeoutSeconds`; default is 15s.
+- This package implements the libdns interfaces: RecordGetter, RecordAppender, RecordSetter, RecordDeleter.
