@@ -18,7 +18,7 @@ import (
 	"github.com/libdns/libdns"
 )
 
-var apiURL string = "http://localhost:5044/api"
+var apiURL string = "https://ipv64.net/api"
 
 // Provider facilitates DNS record manipulation with IPv64.net.
 type Provider struct {
