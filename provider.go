@@ -13,7 +13,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/caddyserver/caddy/v2"
 	"github.com/libdns/libdns"
 )
 
@@ -236,6 +235,7 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	return deleted, nil
 }
 
+/*
 // Module Interface für Caddy
 func init() {
 	// Caddy erkennt den Provider
@@ -245,9 +245,46 @@ func init() {
 func (Provider) CaddyModule() caddy.ModuleInfo {
 	return caddy.ModuleInfo{
 		ID:  "dns.providers.ipv64net",
-		New: func() caddy.Module { return new(Provider) },
+		New: func() caddy.Module { return &Provider{} },
 	}
 }
+
+// UnmarshalCaddyfile implements caddyfile.Unmarshaler so the provider can be
+// configured from a Caddyfile block like:
+//
+//	tls {
+//	  dns ipv64net {
+//	    api_token <token>
+//	    http_timeout_seconds 10
+//	  }
+//	}
+func (p *Provider) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
+	for d.Next() {
+		for d.NextBlock(0) {
+			switch d.Val() {
+			case "api_token", "token":
+				if !d.NextArg() {
+					return d.Err("missing api_token")
+				}
+				p.APIToken = d.Val()
+			case "http_timeout_seconds", "http_timeout":
+				if !d.NextArg() {
+					return d.Err("missing http_timeout_seconds")
+				}
+				v := d.Val()
+				i, err := strconv.Atoi(v)
+				if err != nil {
+					return d.Errf("invalid http_timeout_seconds: %v", err)
+				}
+				p.HTTPTimeoutSeconds = i
+			default:
+				return d.Errf("unknown option %q in ipv64net block", d.Val())
+			}
+		}
+	}
+	return nil
+}
+*/
 
 // Interface guards
 var (
@@ -255,5 +292,6 @@ var (
 	_ libdns.RecordAppender = (*Provider)(nil)
 	_ libdns.RecordSetter   = (*Provider)(nil)
 	_ libdns.RecordDeleter  = (*Provider)(nil)
-	_ caddy.Module          = (*Provider)(nil)
+	// _ caddy.Module          = (*Provider)(nil)
+	// _ caddyfile.Unmarshaler = (*Provider)(nil)
 )
