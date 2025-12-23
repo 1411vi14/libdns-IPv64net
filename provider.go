@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/caddyserver/caddy/v2"
 	"github.com/libdns/libdns"
 )
 
@@ -235,10 +236,24 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 	return deleted, nil
 }
 
+// Module Interface für Caddy
+func init() {
+	// Caddy erkennt den Provider
+	caddy.RegisterModule(Provider{})
+}
+
+func (Provider) CaddyModule() caddy.ModuleInfo {
+	return caddy.ModuleInfo{
+		ID:  "dns.providers.ipv64net",
+		New: func() caddy.Module { return new(Provider) },
+	}
+}
+
 // Interface guards
 var (
 	_ libdns.RecordGetter   = (*Provider)(nil)
 	_ libdns.RecordAppender = (*Provider)(nil)
 	_ libdns.RecordSetter   = (*Provider)(nil)
 	_ libdns.RecordDeleter  = (*Provider)(nil)
+	_ caddy.Module          = (*Provider)(nil)
 )
