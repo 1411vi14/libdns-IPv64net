@@ -127,8 +127,8 @@ type getDomainsResp struct {
 }
 
 // GetRecords lists all the records in the zone.
-func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record, error) {
-	fmt.Println("ipv64net: GetRecords called")
+func (p *Provider) ListZones(ctx context.Context) ([]libdns.Zone, error) {
+	fmt.Println("ipv64net: ListZones called")
 	// request domain information using documented get_domains
 	params := url.Values{}
 	params.Set("get_domains", "")
@@ -145,26 +145,17 @@ func (p *Provider) GetRecords(ctx context.Context, zone string) ([]libdns.Record
 		return nil, fmt.Errorf("ipv64net: unexpected get_domains response: %w", err)
 	}
 
-	zone = strings.TrimSuffix(zone, ".")
-	var out []libdns.Record
+	var out []libdns.Zone
 	for subdomain, info := range resp.Subdomains {
-		if info.Deactivated || !(subdomain == zone || strings.HasSuffix(subdomain, zone)) {
+		if info.Deactivated {
 			continue
 		}
 
-		for _, prefixRecord := range info.Records {
-			if prefixRecord.Deactivated {
-				continue
-			}
-
-			rr := libdns.RR{
-				Type: prefixRecord.Type,
-				Name: prefixRecord.Praefix,
-				TTL:  time.Duration(prefixRecord.TTL) * time.Second,
-			}
-
-			out = append(out, rr)
+		zone := libdns.Zone{
+			Name: subdomain,
 		}
+
+		out = append(out, zone)
 	}
 
 	return out, nil
@@ -176,10 +167,15 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 	var added []libdns.Record
 	for _, r := range records {
 		rr := r.RR()
+
+		subdomain, praefix, err := splitACMEName(zone, rr.Name)
+		if err != nil {
+			return nil, err
+		}
+
 		params := url.Values{}
-		// use documented add_record parameters
-		params.Set("add_record", zone) // Domainname
-		params.Set("praefix", rr.Name) // Domain prefix / host
+		params.Set("add_record", subdomain) // Domainname
+		params.Set("praefix", praefix)      // Domain prefix / host
 		params.Set("type", rr.Type)
 		params.Set("content", rr.Data)
 		// TTL is optional and may not be supported; include if set
@@ -200,32 +196,22 @@ func (p *Provider) AppendRecords(ctx context.Context, zone string, records []lib
 	return added, nil
 }
 
-// SetRecords sets the records in the zone by deleting existing matching records and adding the supplied ones.
-func (p *Provider) SetRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
-	fmt.Println("ipv64net: SetRecords called")
-	var updated []libdns.Record
-	for _, r := range records {
-		// Try delete first (best-effort), then add the new record.
-		_, _ = p.DeleteRecords(ctx, zone, []libdns.Record{r})
-		added, err := p.AppendRecords(ctx, zone, []libdns.Record{r})
-		if err != nil {
-			return nil, err
-		}
-		updated = append(updated, added...)
-	}
-	return updated, nil
-}
-
 // DeleteRecords deletes the specified records from the zone. It returns the records that were deleted.
 func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []libdns.Record) ([]libdns.Record, error) {
 	fmt.Println("ipv64net: DeleteRecords called")
+
 	var deleted []libdns.Record
 	for _, r := range records {
 		rr := r.RR()
+
+		subdomain, praefix, err := splitACMEName(zone, rr.Name)
+		if err != nil {
+			return nil, err
+		}
+
 		params := url.Values{}
-		// use documented del_record parameters
-		params.Set("del_record", zone)
-		params.Set("praefix", rr.Name)
+		params.Set("del_record", subdomain)
+		params.Set("praefix", praefix)
 		params.Set("type", rr.Type)
 		// Some APIs expect content to choose which record to delete if multiple exist
 		if rr.Data != "" {
@@ -241,6 +227,28 @@ func (p *Provider) DeleteRecords(ctx context.Context, zone string, records []lib
 		deleted = append(deleted, r)
 	}
 	return deleted, nil
+}
+
+func splitACMEName(zone string, rrName string) (subdomain string, praefix string, err error) {
+	zone = strings.TrimSuffix(zone, ".")
+	rrName = strings.TrimSuffix(rrName, ".")
+
+	parts := strings.Split(rrName, ".")
+
+	if len(parts) < 1 {
+		return "", "", fmt.Errorf("invalid rr.Name: %q", rrName)
+	} else if len(parts) == 1 {
+		return zone, rrName, nil
+	}
+
+	// last label is the subdomain
+	sub := parts[len(parts)-1]
+
+	// everything before that is the prefix
+	praefix = strings.Join(parts[:len(parts)-1], ".")
+
+	subdomain = sub + "." + zone
+	return subdomain, praefix, nil
 }
 
 // Module Interface für Caddy
@@ -294,9 +302,8 @@ func (p *Provider) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 
 // Interface guards
 var (
-	_ libdns.RecordGetter   = (*Provider)(nil)
+	_ libdns.ZoneLister     = (*Provider)(nil)
 	_ libdns.RecordAppender = (*Provider)(nil)
-	_ libdns.RecordSetter   = (*Provider)(nil)
 	_ libdns.RecordDeleter  = (*Provider)(nil)
 	_ caddy.Module          = (*Provider)(nil)
 	_ caddyfile.Unmarshaler = (*Provider)(nil)

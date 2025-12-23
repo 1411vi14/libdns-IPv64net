@@ -34,7 +34,7 @@ func TestFqdnToRelative(t *testing.T) {
 	}
 }
 
-func TestGetRecords_parsesGetDomains(t *testing.T) {
+func TestListZones_parsesGetDomains(t *testing.T) {
 	// sample response similar to documented shape
 	resp := getDomainsResp{
 		Subdomains: map[string]struct {
@@ -77,24 +77,23 @@ func TestGetRecords_parsesGetDomains(t *testing.T) {
 		httpClient: srv.Client(),
 	}
 
-	recs, err := p.GetRecords(context.Background(), "test.ipv64.net")
+	zones, err := p.ListZones(context.Background())
 	if err != nil {
 		t.Fatalf("GetRecords error: %v", err)
 	}
-	if len(recs) == 0 {
+	if len(zones) == 0 {
 		t.Fatalf("expected records, got none")
 	}
 	// expect an RR with Name "www", Type "A", TTL 300s
 	found := false
-	for _, r := range recs {
-		if rr, ok := r.(libdns.RR); ok {
-			if rr.Name == "www" && rr.Type == "A" && rr.TTL == 300*time.Second {
-				found = true
-			}
+	for _, zone := range zones {
+		if zone.Name == "test.ipv64.net" {
+			found = true
+			break
 		}
 	}
 	if !found {
-		t.Fatalf("expected record with Name=www Type=A TTL=300s; got %+v", recs)
+		t.Fatalf("expected record with Name=www Type=A TTL=300s; got %+v", zones)
 	}
 }
 
@@ -142,5 +141,31 @@ func TestAppendAndDelete_callsAPI(t *testing.T) {
 	if lastForm.Get("del_record") != "example.com" || lastForm.Get("praefix") != "host" ||
 		lastForm.Get("type") != "A" {
 		t.Fatalf("unexpected del_record form: %v", lastForm)
+	}
+}
+
+func TestSplitACMEName(t *testing.T) {
+	table := []struct {
+		zone       string
+		rrName     string
+		wantSubdom string
+		wantPraef  string
+		wantErr    bool
+	}{
+		{"example.com.", "_acme-challenge", "example.com", "_acme-challenge", false},
+		{"example.com.", "_acme-challenge.test", "test.example.com", "_acme-challenge", false},
+		{"example.com.", "_acme-challenge.test.subdomain", "subdomain.example.com", "_acme-challenge.test", false},
+		{"example.com.", "_acme-challenge.test.subsubdomain.subdomain", "subdomain.example.com", "_acme-challenge.test.subsubdomain", false},
+		{"example.com.", "", "example.com", "", true},
+	}
+
+	for _, tc := range table {
+		gotSubdom, gotPraef, err := splitACMEName(tc.zone, tc.rrName)
+		if err != nil {
+			t.Fatalf("splitACMEName(%q,%q) error: %v", tc.zone, tc.rrName, err)
+		}
+		if gotSubdom != tc.wantSubdom || gotPraef != tc.wantPraef {
+			t.Fatalf("splitACMEName(%q,%q) = (%q,%q); want (%q,%q)", tc.zone, tc.rrName, gotSubdom, gotPraef, tc.wantSubdom, tc.wantPraef)
+		}
 	}
 }
