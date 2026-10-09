@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
     - uses: actions/checkout@v4
 
@@ -42,8 +42,27 @@ jobs:
         GOARCH: amd64
       run: "$(go env GOPATH)/bin/xcaddy build --with github.com/1411vi14/libdns-IPv64net=. --output ./caddy-ipv64net.exe"
 
-    - name: Deploy release asset
+    - name: Upload Caddy artifact
       if: github.event_name == 'release'
+      uses: actions/upload-artifact@v4
+      with:
+        name: caddy-ipv64net
+        path: ./caddy-ipv64net.exe
+        if-no-files-found: error
+
+  deploy:
+    if: github.event_name == 'release'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - name: Download Caddy artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: caddy-ipv64net
+
+    - name: Deploy release asset
       env:
         GH_TOKEN: ${{ github.token }}
       run: gh release upload "$GITHUB_REF_NAME" ./caddy-ipv64net.exe --clobber
