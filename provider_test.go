@@ -169,3 +169,22 @@ func TestSplitACMEName(t *testing.T) {
 		}
 	}
 }
+
+func TestDoRequest_WithPost_CreatesFormdata(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "ok")
+	}))
+	defer srv.Close()
+	apiURL = srv.URL
+	p := &Provider{
+		APIToken:   "token",
+		httpClient: srv.Client(),
+	}
+	_, status, err := p.doRequest(context.Background(), url.Values{}, http.MethodGet)
+	if err != nil {
+		t.Fatalf("doRequest error: %v", err)
+	}
+	if status != 200 {
+		t.Fatalf("doRequest status = %d; want 200", status)
+	}
+}

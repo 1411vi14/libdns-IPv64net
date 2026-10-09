@@ -5,7 +5,7 @@ adding, updating and deleting DNS records via IPv64.net's API.
 
 Build Caddy with IPv64net Plugin:
 ```bash
-xcaddy build --with github.com/1411vi14/libdns-IPv64net -output .\caddy-ipv64net.exe
+xcaddy build --with github.com/1411vi14/libdns-IPv64net --output .\caddy-ipv64net.exe
 ```
 
 Example usage with Caddy (Caddyfile):
