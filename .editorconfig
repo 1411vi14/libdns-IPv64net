@@ -1,0 +1,29 @@
+root = true
+
+# All files
+[*]
+indent_style = tab
+end_of_line = lf
+charset = utf-8
+insert_final_newline = true
+indent_size = 4
+tab_width = 4
+
+# Xml files
+[*.xml]
+indent_size = 2
+tab_width = 2
+
+# Xml project files
+[*.{csproj,fsproj,vbproj,proj,slnx}]
+indent_size = 2
+tab_width = 2
+
+# Xml config files
+[*.{props,targets,config,nuspec}]
+indent_size = 2
+tab_width = 2
+
+[*.json]
+indent_size = 2
+tab_width = 2
